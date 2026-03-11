@@ -117,8 +117,8 @@ export default function App() {
     const createDots = (imageData?: ImageData) => {
       const dots = [];
       if (imageData) {
-        for (let y = 0; y < imageData.height; y += 6) {
-          for (let x = 0; x < imageData.width; x += 6) {
+        for (let y = 0; y < imageData.height; y += 4) {
+          for (let x = 0; x < imageData.width; x += 4) {
             const index = (y * imageData.width + x) * 4;
             const r = imageData.data[index];
             const a = imageData.data[index + 3];
@@ -144,13 +144,26 @@ export default function App() {
         console.log(`Generated ${dots.length} dots from image`);
       }
       
-      const dotGeometry = new THREE.CircleGeometry(0.006, 6);
-      const instancedMesh = new THREE.InstancedMesh(dotGeometry, dotMaterial, dots.length);
+      const regularDots: {lat: number, lon: number}[] = [];
+      const japanDots: {lat: number, lon: number}[] = [];
+      
+      dots.forEach(dot => {
+        // Japan bounding box (approximate)
+        if (dot.lat > 30 && dot.lat < 46 && dot.lon > 129 && dot.lon < 146) {
+          japanDots.push(dot);
+        } else {
+          regularDots.push(dot);
+        }
+      });
+      
+      const dotGeometry = new THREE.CircleGeometry(0.008, 6);
+      const instancedMesh = new THREE.InstancedMesh(dotGeometry, dotMaterial, regularDots.length);
+      instancedMesh.frustumCulled = false;
       
       const dummy = new THREE.Object3D();
       const radius = 1.405;
       
-      dots.forEach((dot, i) => {
+      regularDots.forEach((dot, i) => {
         const phi = (90 - dot.lat) * (Math.PI / 180);
         const theta = (dot.lon + 180) * (Math.PI / 180);
         
@@ -165,6 +178,28 @@ export default function App() {
       
       instancedMesh.instanceMatrix.needsUpdate = true;
       globeGroup.add(instancedMesh);
+      
+      if (japanDots.length > 0) {
+        const japanMaterial = new THREE.MeshBasicMaterial({ color: 0x0070f3, side: THREE.DoubleSide });
+        const japanMesh = new THREE.InstancedMesh(dotGeometry, japanMaterial, japanDots.length);
+        japanMesh.frustumCulled = false;
+        
+        japanDots.forEach((dot, i) => {
+          const phi = (90 - dot.lat) * (Math.PI / 180);
+          const theta = (dot.lon + 180) * (Math.PI / 180);
+          
+          dummy.position.x = -(radius * Math.sin(phi) * Math.cos(theta));
+          dummy.position.z = (radius * Math.sin(phi) * Math.sin(theta));
+          dummy.position.y = (radius * Math.cos(phi));
+          
+          dummy.lookAt(0, 0, 0);
+          dummy.updateMatrix();
+          japanMesh.setMatrixAt(i, dummy.matrix);
+        });
+        
+        japanMesh.instanceMatrix.needsUpdate = true;
+        globeGroup.add(japanMesh);
+      }
     };
 
     const image = new Image();
