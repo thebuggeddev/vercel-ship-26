@@ -42,10 +42,11 @@ export default function App() {
     labelRenderer.setSize(window.innerWidth, window.innerHeight);
     labelRenderer.domElement.style.position = 'absolute';
     labelRenderer.domElement.style.top = '0px';
+    labelRenderer.domElement.style.pointerEvents = 'none';
     containerRef.current.appendChild(labelRenderer.domElement);
 
     // Orbit Controls
-    const controls = new OrbitControls(camera, labelRenderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enablePan = false;
@@ -302,7 +303,7 @@ export default function App() {
 
     // Animation Loop
     let animationFrameId: number;
-    const clock = new THREE.Clock();
+    let lastTime = performance.now();
     let currentThemeProgress = 0;
     
     const lightBg = new THREE.Color('#f7f7f7');
@@ -313,7 +314,9 @@ export default function App() {
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       
-      const delta = clock.getDelta();
+      const time = performance.now();
+      const delta = Math.min((time - lastTime) / 1000, 0.1); // Cap delta to 0.1s
+      lastTime = time;
       
       // Theme Interpolation
       const lerpFactor = 1.0 - Math.exp(-delta * 3.0);
