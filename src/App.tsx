@@ -20,6 +20,7 @@ export default function App() {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    let isDisposed = false;
 
     // Scene Setup
     const scene = new THREE.Scene();
@@ -113,8 +114,9 @@ export default function App() {
     // 2. Earth Map Dots
     const dotMaterial = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
     
-    // Generate procedural dots if image fails, but try image first
+    // Generate map dots from the earth image mask.
     const createDots = (imageData?: ImageData) => {
+      if (isDisposed) return;
       const dots = [];
       if (imageData) {
         for (let y = 0; y < imageData.height; y += 4) {
@@ -132,14 +134,10 @@ export default function App() {
         }
       }
       
-      // Fallback if no dots were generated (e.g. image was all white or transparent)
+      // Avoid random fallback dots: if the source map is invalid, skip drawing a wrong map.
       if (dots.length === 0) {
-        console.warn("No dots generated from image, using fallback");
-        for (let i = 0; i < 2000; i++) {
-          const lat = Math.random() * 180 - 90;
-          const lon = Math.random() * 360 - 180;
-          dots.push({ lat, lon });
-        }
+        console.warn("No dots generated from earth map image.");
+        return;
       } else {
         console.log(`Generated ${dots.length} dots from image`);
       }
@@ -204,6 +202,7 @@ export default function App() {
 
     const image = new Image();
     image.onload = () => {
+      if (isDisposed) return;
       const canvas = document.createElement('canvas');
       canvas.width = image.width;
       canvas.height = image.height;
@@ -217,12 +216,13 @@ export default function App() {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         createDots(imageData);
       } catch (e) {
-        console.warn("Canvas tainted or getImageData failed. Using fallback dots.", e);
+        console.warn("Canvas tainted or getImageData failed.", e);
         createDots();
       }
     };
     image.onerror = () => {
-      console.warn("Failed to load earth map image. Using fallback dots.");
+      if (isDisposed) return;
+      console.warn("Failed to load earth map image.");
       createDots();
     };
     image.src = earthImageSrc;
@@ -338,7 +338,7 @@ export default function App() {
 
     // Animation Loop
     let animationFrameId: number;
-    let lastTime = performance.now();
+    const clock = new THREE.Clock();
     let currentThemeProgress = 0;
     
     const lightBg = new THREE.Color('#f7f7f7');
@@ -347,11 +347,10 @@ export default function App() {
     const darkDot = new THREE.Color(0xeeeeee);
 
     const animate = () => {
+      if (isDisposed) return;
       animationFrameId = requestAnimationFrame(animate);
       
-      const time = performance.now();
-      const delta = Math.min((time - lastTime) / 1000, 0.1); // Cap delta to 0.1s
-      lastTime = time;
+      const delta = Math.min(clock.getDelta(), 0.1); // Cap delta to 0.1s
       
       // Theme Interpolation
       const lerpFactor = 1.0 - Math.exp(-delta * 3.0);
@@ -407,12 +406,17 @@ export default function App() {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      isDisposed = true;
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
       controls.dispose();
       if (containerRef.current) {
-        containerRef.current.removeChild(renderer.domElement);
-        containerRef.current.removeChild(labelRenderer.domElement);
+        if (containerRef.current.contains(renderer.domElement)) {
+          containerRef.current.removeChild(renderer.domElement);
+        }
+        if (containerRef.current.contains(labelRenderer.domElement)) {
+          containerRef.current.removeChild(labelRenderer.domElement);
+        }
       }
       scene.clear();
     };
